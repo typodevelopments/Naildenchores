@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>The Nail Den - Daily Chore Distributor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #fff;
+            color: #000;
+        }
+
+        header {
+            background: #000;
+            color: #FFD700;
+            padding: 20px;
+            text-align: center;
+            font-size: 28px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+
+        .container {
+            padding: 20px;
+        }
+
+        .section {
+            background: #fff;
+            border: 2px solid #FFD700;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            text-align: center;
+            color: #000;
+        }
+
+        .tech-selection label {
+            display: inline-block;
+            margin: 8px 12px;
+            font-size: 16px;
+        }
+
+        button {
+            background: #FFD700;
+            color: #000;
+            border: none;
+            padding: 12px 25px;
+            margin: 10px auto;
+            display: block;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #e6c200;
+        }
+
+        .chore-list div, .history-item {
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .history-item {
+            font-size: 14px;
+        }
+
+        .history-date {
+            font-weight: bold;
+        }
+
+        footer {
+            text-align: center;
+            padding: 10px;
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>The Nail Den</header>
+
+    <div class="container">
+
+        <div class="section tech-selection">
+            <h2>Select Today's Working Technicians</h2>
+            <label><input type="checkbox" value="Caneisha"> Caneisha</label>
+            <label><input type="checkbox" value="Cristel"> Cristel</label>
+            <label><input type="checkbox" value="Keniyra"> Keniyra</label>
+            <label><input type="checkbox" value="Lela"> Lela</label>
+            <label><input type="checkbox" value="Alexis"> Alexis</label>
+            <label><input type="checkbox" value="Michelle"> Michelle</label>
+        </div>
+
+        <button onclick="assignChores()">Assign Chores</button>
+        <button onclick="reassignChores()">Reassign Chores</button>
+        <button onclick="generatePDF()">Save Today's Chores as PDF</button>
+
+        <div class="section assignments">
+            <h2>Today's Chore Assignments</h2>
+            <div id="choreAssignments" class="chore-list"></div>
+        </div>
+
+        <div class="section">
+            <h2>Chore Assignment History</h2>
+            <div id="historyLog"></div>
+        </div>
+
+    </div>
+
+    <footer>Built for The Nail Den | Powered by Excellence</footer>
+
+<script>
+    const dailyChores = [
+        { name: "Replace Barbicide", points: 1, priority: true },
+        { name: "Clean Bathroom", points: 6, priority: true },
+        { name: "Put Implements in Sterilizer Pouch", points: 2, priority: true },
+        { name: "Prep Hot Towels", points: 2 },
+        { name: "Towel Warmer (manage/setup)", points: 1 },
+        { name: "Floor Cleaning (Sweep + Mop)", points: 8 }, // Bundle sweep + mop
+        { name: "Take Out Trash", points: 3 },
+        { name: "Dusting", points: 2 },
+        { name: "Clean Coffee Area", points: 3 },
+        { name: "Put Polish Back", points: 2 },
+        { name: "Clean Brushes", points: 3 },
+        { name: "Clean Prep Sink", points: 3 },
+    ];
+
+    const everyOtherDayChores = [
+        { name: "Wash Towels", points: 3 },
+        { name: "Fold Towels", points: 3 },
+        { name: "Clean Back Room", points: 5 }
+    ];
+
+    const weeklyChores = {
+        "Sunday": [{ name: "Sunday Trash", points: 3 }],
+        "Monday": [{ name: "Put Trash Bin Back", points: 2 }],
+        "Friday": [{ name: "Clean Fridge", points: 4 }, { name: "Clean Pedi Carts", points: 5 }, { name: "Stack Sugar Scrubs", points: 2 }]
+    };
+
+    let yesterdayAssignments = JSON.parse(localStorage.getItem('yesterdayAssignments')) || {};
+    let historyLog = JSON.parse(localStorage.getItem('historyLog')) || [];
+
+    function getWorkingTechs() {
+        const checkboxes = document.querySelectorAll('.tech-selection input[type="checkbox"]');
+        return Array.from(checkboxes).filter(c => c.checked).map(c => c.value);
+    }
+
+    function getTodayChores() {
+        const today = new Date();
+        const dayName = today.toLocaleDateString('en-US', { weekday: 'long' });
+        const isEvenDay = today.getDate() % 2 === 0;
+
+        let chores = [...dailyChores];
+
+        if (isEvenDay) {
+            chores = chores.concat(everyOtherDayChores);
+        }
+
+        if (weeklyChores[dayName]) {
+            chores = chores.concat(weeklyChores[dayName]);
+        }
+
+        return chores;
+    }
+
+    function shuffleArray(array) {
+        return array.sort(() => Math.random() - 0.5);
+    }
+
+    function isBigChore(chore) {
+        return chore.points >= 5;
+    }
+
+    function assignChores() {
+        const techs = getWorkingTechs();
+        if (techs.length === 0) {
+            alert("Please select at least one technician!");
+            return;
+        }
+
+        const todayChores = getTodayChores();
+        const totalPoints = todayChores.reduce((sum, chore) => sum + chore.points, 0);
+        const pointsPerTech = Math.ceil(totalPoints / techs.length);
+
+        const assignments = {};
+        techs.forEach(tech => assignments[tech] = { chores: [], totalPoints: 0, hasBigChore: false });
+
+        const priorityChores = todayChores.filter(c => c.priority);
+        const otherChores = todayChores.filter(c => !c.priority);
+
+        shuffleArray(priorityChores);
+        shuffleArray(otherChores);
+
+        // Assign priority chores first
+        priorityChores.forEach(chore => {
+            assignChore(assignments, techs, chore);
+        });
+
+        // Assign remaining chores
+        otherChores.forEach(chore => {
+            assignChore(assignments, techs, chore);
+        });
+
+        displayAssignments(assignments);
+        saveToday(assignments);
+    }
+
+    function assignChore(assignments, techs, chore) {
+        const availableTechs = techs.filter(tech => 
+            (!yesterdayAssignments[tech] || yesterdayAssignments[tech] !== chore.name)
+        );
+
+        const sortedTechs = availableTechs.length ? availableTechs : techs;
+        sortedTechs.sort((a, b) => assignments[a].totalPoints - assignments[b].totalPoints);
+
+        for (let tech of sortedTechs) {
+            if (isBigChore(chore) && assignments[tech].hasBigChore) continue;
+            assignments[tech].chores.push(chore.name);
+            assignments[tech].totalPoints += chore.points;
+            if (isBigChore(chore)) assignments[tech].hasBigChore = true;
+            break;
+        }
+    }
+
+    function displayAssignments(assignments) {
+        const container = document.getElementById('choreAssignments');
+        container.innerHTML = "";
+
+        for (const tech in assignments) {
+            const div = document.createElement('div');
+            div.innerHTML = `<strong>${tech}:</strong> ${assignments[tech].chores.join(", ")} <em>(${assignments[tech].totalPoints} pts)</em>`;
+            container.appendChild(div);
+        }
+    }
+
+    function saveToday(assignments) {
+        const todayYest = {};
+        Object.keys(assignments).forEach(tech => {
+            assignments[tech].chores.forEach(chore => {
+                todayYest[tech] = chore;
+            });
+        });
+        localStorage.setItem('yesterdayAssignments', JSON.stringify(todayYest));
+
+        const todayDate = new Date().toLocaleDateString();
+        historyLog.push({ date: todayDate, assignments });
+        localStorage.setItem('historyLog', JSON.stringify(historyLog));
+
+        updateHistory();
+    }
+
+    function updateHistory() {
+        const historyContainer = document.getElementById('historyLog');
+        historyContainer.innerHTML = "";
+
+        historyLog.slice().reverse().forEach(entry => {
+            const div = document.createElement('div');
+            div.classList.add('history-item');
+            div.innerHTML = `<span class="history-date">${entry.date}:</span> ${Object.entries(entry.assignments).map(([tech, info]) => `${tech}: ${info.chores.join(", ")} (${info.totalPoints} pts)`).join("; ")}`;
+            historyContainer.appendChild(div);
+        });
+    }
+
+    function reassignChores() {
+        localStorage.removeItem('yesterdayAssignments');
+        assignChores();
+    }
+
+    async function generatePDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        const todayDate = new Date();
+        const dateString = `${todayDate.getMonth()+1}-${todayDate.getDate()}-${todayDate.getFullYear()}`;
+        const container = document.getElementById('choreAssignments');
+
+        let y = 10;
+        doc.setFontSize(16);
+        doc.text(`The Nail Den - Chore Assignments - ${dateString}`, 10, y);
+        y += 10;
+
+        container.querySelectorAll('div').forEach(div => {
+            doc.setFontSize(12);
+            doc.text(div.textContent, 10, y);
+            y += 10;
+        });
+
+        doc.save(`Chores_${dateString}.pdf`);
+    }
+
+    updateHistory();
+</script>
+
+</body>
+</html>
